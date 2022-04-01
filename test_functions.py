@@ -24,9 +24,11 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
 
     '''
     import time
-    start = time.time()
     from scipy.stats import ttest_1samp, rayleigh, uniform, kstest, bartlett
     from statsmodels.stats.diagnostic import lilliefors #lilliefors is a K-S test with a gaussian with unknown meand and sd.
+    import numpy as np
+    
+    start = time.time()
     
     def autocorr(x):
         '''
@@ -53,7 +55,6 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
         return acov, acor
     
     shp = np.shape(D)
-    m = 0
     nogood = {}
     for ch in range(0,1):
         tmp = np.array([],dtype = np.uint8)
@@ -89,8 +90,8 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
                             uncorrelation of single components and equal variances,
                             then check for bivariate normal distribution fer asserting 
                             indipendent gaussians distribution between real and imaginary part'''
-                            r = np.abs(sp-np.mean(sp))
-                            th = np.angle(sp)
+                            r = np.abs(noise)-np.mean(np.abs(noise))
+                            th = np.angle(noise)
                             th = np.where(th>0,th*(360/(2*np.pi)), -th*(360/(2*np.pi))+180)
                             # cdf1 = rayleigh(0,np.sqrt(np.mean((r**2)/2))).cdf(np.linspace(np.min(r),np.max(r),100))#the article states that it could be used for ANY mean while zero mean is checked aside
                             # cdf2 = uniform(0,360).cdf(np.linspace(np.min(th),np.max(th),100))
@@ -101,13 +102,6 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
                             if p1<=pval or p2<=pval:
                                 tmp = np.append(tmp,sgn)
         nogood['{}'.format(ch)] = tmp
-    #As stated in the article, this is a ulterior check for gaussianity.
-    # for ch in range(0,shp[2]):
-    #     tmp = np.array([],dtype = np.uint8)
-    #     for sgn in range(0,shp[0]):
-    #         _, p = lilliefors(np.real(D[sgn,-100:,ch]),dist='norm')
-    #         if p<0.05:
-    #             tmp = np.append(tmp,sgn)
-    #     nogoodgauss['{}'.format(ch)] = tmp
+
     print("---Noise evaluaton completed in {:.2f} seconds.---".format(time.time()-start))
     return nogood
