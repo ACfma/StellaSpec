@@ -4,6 +4,12 @@ Created on Fri Apr  1 13:21:27 2022
 
 @author: Andrea
 """
+import time
+from scipy.stats import ttest_1samp, rayleigh, uniform, kstest, bartlett
+from statsmodels.stats.diagnostic import lilliefors #lilliefors is a K-S test with a gaussian with unknown meand and sd.
+import numpy as np
+import pandas as pd
+
 def Look4Gauss(D, noise_area = 100, pval=0.05):
     '''
     Look4Gauss implement some test of normality for noise in an NMR signal as mentioned in "A statistical analysis of NMR spectrometer noise"(Grage and Akke, 2003).
@@ -23,10 +29,6 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
         Dictionary of position of faulty signal for each channel.
 
     '''
-    import time
-    from scipy.stats import ttest_1samp, rayleigh, uniform, kstest, bartlett
-    from statsmodels.stats.diagnostic import lilliefors #lilliefors is a K-S test with a gaussian with unknown meand and sd.
-    import numpy as np
     
     start = time.time()
     
@@ -76,7 +78,7 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
                 else:
                     #Check for same variances between real and imaginary part
                     _, p = bartlett(rnoise, inoise)#Bartlet test works in asymptotic condition.
-                    if p < pval:
+                    if p <= pval:
                         tmp = np.append(tmp,sgn)
                     else:
                         #Checking for indipendence between noise's points
@@ -105,3 +107,86 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
 
     print("---Noise evaluaton completed in {:.2f} seconds.---".format(time.time()-start))
     return nogood
+
+def Slotboom(D,snrt = 2, n_r = 100, nogood=None,):
+    '''
+    Metods for transient events detection as describen in (Slotboom et al, 2008-2009)
+
+    Parameters
+    ----------
+    D : 3Darray
+        Array of the given signal with shape (n°signals, n°points, n°channels). The check is done by channel.
+    snrt : float, optional
+        SNR threshold for which under it it is considerated noise. The default is 1.5.
+    n_r : int, optional
+        Number of last data point to be consider as noise.
+        In case threshold doesn't find a good value untill n_r, then n_r is taken as threshold. The default is 100.
+    nogood : nogood : dict
+        Dictionary of position of faulty signal for each channel.The default is None.
+    
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    '''
+    #creating D matrix and calcoulus of SMs (Reliability testing of in vivo 1H-MRS-signals and elimination of signal artifacts by median filtering Slatboom et al, 2008)
+    #The article states that both FIDs or Specroums could be used
+    for ch in range(D.shape[2]):
+        D_r = np.real(D[:,:,ch])
+        print(D.shape)
+        if nogood != None:
+            D_r = np.delete(D_r,nogood['{}'.format(ch)],axis = 0)
+        def moments(D):
+            M = np.shape(D)[0]
+            um = np.mean(D,axis = 0)
+            uvar = np.sum((D-um)**2,axis = 0)/(M-1)
+            bsk = (np.sqrt(M*(M-1))/(M-2)) * np.sqrt(M) * np.sum((D-um)**3,axis = 0)/(np.sum((D-um)**2,axis = 0))**(3/2)
+            bks = ((M+1)*M/((M-3)*(M-2)*(M-1)))*((np.sum((D-um)**4,axis = 0))/(uvar**2)) - 3*((M-1)**2)/((M-2)*(M-3)) #excess kurtosis
+            return um, uvar, bsk, bks
+        um, uvar, bsk, bks = moments(D_r)
+        #Da anche le espressioni per le incertezze di queste quantità ma forse non sono necessarie per il momento
+        def masking(D,snrt, n_r):
+            shp = np.shape(D[:,:,ch])
+            mask = np.ones(shp, np.dtype('uint8'))
+            for sgn in range(0,shp[0]):
+                x = D[sgn,:]
+                try:
+                    indx = np.where(np.abs(x)>snrt*np.std(x[-n_r:]))[0][-1]
+                    
+                except IndexError as e:
+                    print('Error {} has occurred: setting noise to n_r'.format(e))                
+                    indx = shp[1]
+                if indx>n_r:#at least last 100 position are set to noise (saw from median)
+                    indx = shp[1]-n_r
+                for k in range(indx,shp[1]):
+                    mask[sgn,k] = 0
+            return mask
+        mask = masking(D, snrt, n_r)
+        #@jit(nopython=True)
+        def kstat(bs,mask):
+            if np.sum(mask) > 0 and np.sum(mask) != D.shape[1]: #if there is a decayed signal  
+                k = np.mean(np.abs(bs[mask==1]))
+                k_star = np.mean(np.abs(bs[mask==0]))
+                vark = np.sum((np.abs(bs[mask==0])-k_star)**2)/(len(bs[mask==0])-1)
+            else:
+                k,vark = 0, 0
+            return k, vark
+        rel_ch = pd.DataFrame()
+        k_s, k_k, vark_s, vark_k = [],[],[],[]
+        for sgn in range(0,np.shape(mask)[0]):
+            k_0, vark_0 = kstat(bsk[:], mask[sgn,:])
+            k_1, vark_1 = kstat(bks[:], mask[sgn,:])
+            k_s.append(k_0), k_k.append(k_1), vark_s.append(vark_0), vark_k.append(vark_1)
+        rel_ch['k_s'] = k_s
+        rel_ch['vark_s'] = vark_s
+        rel_ch['k_k'] = k_k
+        rel_ch['vark_k'] = vark_k
+        ch_mask = []
+        for i in range(D.shape[0]):
+             if (rel_ch['k_s'][i]+np.sqrt(rel_ch['vark_s'][i])>=0.3272) and (rel_ch['k_s'][i]-np.sqrt(rel_ch['vark_s'][i])<=0.3272) and (rel_ch['k_k'][i]+np.sqrt(rel_ch['vark_k'][i])>=0.6101)and (rel_ch['k_k'][i]-np.sqrt(rel_ch['vark_k'][i])<=0.6101):
+                ch_mask.append(True)
+             else:
+                ch_mask.append(False)
+    return um, uvar, bsk, bks, rel_ch, ch_mask
