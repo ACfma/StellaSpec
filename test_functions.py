@@ -124,11 +124,20 @@ def Slotboom(D,snrt = 2, n_r = 100, nogood=None,):
     nogood : nogood : dict
         Dictionary of position of faulty signal for each channel.The default is None.
     
-
     Returns
     -------
-    TYPE
-        DESCRIPTION.
+    um: 1darray
+        Point-wise mean value of the signal.
+    uvar: 1darray
+        Point-wise variance.
+    bsk: 1darray
+        Point-wise skewness.
+    bks: 1darray
+        Point-wise kurtosis.
+    rel_ch: pd.DataFrame
+        Dataframe of k statistics and variances.
+    ch_mask: list
+        List of compliant channels.
 
     '''
     #creating D matrix and calcoulus of SMs (Reliability testing of in vivo 1H-MRS-signals and elimination of signal artifacts by median filtering Slatboom et al, 2008)
