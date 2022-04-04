@@ -31,6 +31,8 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
     '''
     
     start = time.time()
+    if len(np.shape(D))==1:
+        D = D[np.newaxis,:,np.newaxis]
     
     def autocorr(x):
         '''
@@ -82,27 +84,38 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
                         tmp = np.append(tmp,sgn)
                     else:
                         #Checking for indipendence between noise's points
-                        _,racorr = autocorr(rnoise)
-                        _,iacorr = autocorr(inoise)
-                        l = len(racorr)
-                        if len(racorr[np.abs(racorr)>1.96/np.sqrt(l)])>pval*l +1  or len(iacorr[np.abs(iacorr)>1.96/np.sqrt(l)])>pval*l + 1: #plus one for excluding the autocoralation at zero (only correltion of iid from 1 to n folluwa a distribution N(0,1/n)) Brockwell-Davis pg. 222
-                            tmp = np.append(tmp,sgn)
+                        # _,racorr = autocorr(rnoise)
+                        # _,iacorr = autocorr(inoise)
+                        # l = len(racorr)
+                        # if len(racorr[np.abs(racorr)>1.96/np.sqrt(l)])>pval*l +1  or len(iacorr[np.abs(iacorr)>1.96/np.sqrt(l)])>pval*l + 1: #plus one for excluding the autocoralation at zero (only correltion of iid from 1 to n folluwa a distribution N(0,1/n)) Brockwell-Davis pg. 222
+                        #     tmp = np.append(tmp,sgn)
+                        # else:
+                        #     '''If whe cannot exclude gaussian real and imaginary part with zero mean, 
+                        #         uncorrelation of single components and equal variances,
+                        #         then check for bivariate normal distribution fer asserting 
+                        #         indipendent gaussians distribution between real and imaginary part'''
+                        r = np.abs(noise)
+                        scale = np.sqrt(np.mean((r**2)/2))#the sigma is the MLE of rayleigh as set in https://ocw.mit.edu/ans7870/18/18.443/s15/projects/Rproject3_rmd_rayleigh_theory.html 
+                        #R=r/scale
+                        th = np.angle(noise)
+                        th = np.where(th>0,th*(360/(2*np.pi)), -th*(360/(2*np.pi))+180)
+                        # cdf1 = rayleigh(0,np.sqrt(np.mean((r**2)/2))).cdf(np.linspace(np.min(r),np.max(r),100))#the article states that it could be used for ANY mean while zero mean is checked aside
+                        # cdf2 = uniform(0,360).cdf(np.linspace(np.min(th),np.max(th),100))
+                        #ATTENTION  this should be lilliefors test (K-S with MLE) but the function "lilliefors" doesn't support reyleigh pdf
+                        #Mean was set the aritmetic mean (for CLT it should be the MLE of the gaussian centered on the real value) 
+                        D0, _ = kstest(r, cdf = rayleigh.cdf, args=(0,scale))
+                        statistics = np.array([]) 
+                        for i in range (1000):
+                            samp = rayleigh.rvs(loc=0, scale=scale, size=len(r), random_state=None)
+                            s, _ = kstest(samp, cdf = rayleigh.cdf, args=(0,scale))
+                            statistics = np.append(statistics,s)
+                        if len(statistics)!=0:
+                            p1 = len(statistics[statistics>=D0])/len(statistics)#one sided p-value, for two sided, the condition in the next "if" is imposed
                         else:
-                            '''If whe cannot exclude gaussian real and imaginary part with zero mean, 
-                            uncorrelation of single components and equal variances,
-                            then check for bivariate normal distribution fer asserting 
-                            indipendent gaussians distribution between real and imaginary part'''
-                            r = np.abs(noise)-np.mean(np.abs(noise))
-                            th = np.angle(noise)
-                            th = np.where(th>0,th*(360/(2*np.pi)), -th*(360/(2*np.pi))+180)
-                            # cdf1 = rayleigh(0,np.sqrt(np.mean((r**2)/2))).cdf(np.linspace(np.min(r),np.max(r),100))#the article states that it could be used for ANY mean while zero mean is checked aside
-                            # cdf2 = uniform(0,360).cdf(np.linspace(np.min(th),np.max(th),100))
-                            #ATTENTION  this should be lilliefors test (K-S with MLE) but the function "lilliefors" doesn't support reyleigh pdf
-                            #Mean was set the aritmetic mean (for CLT it should be the MLE of the gaussian centered on the real value) while the sigma is the MLE of rayleigh as set in https://ocw.mit.edu/ans7870/18/18.443/s15/projects/Rproject3_rmd_rayleigh_theory.html 
-                            _, p1 = kstest(r, cdf = rayleigh.cdf, args = (0,np.sqrt(np.mean((r**2)/2))))
-                            _, p2 = kstest(th, cdf = uniform.cdf, args = (0,360)) #using degree because angle gives value in (-pi,pi] and ks test between [-arg[0], arg[1]]
-                            if p1<=pval or p2<=pval:
-                                tmp = np.append(tmp,sgn)
+                            p1=0.0
+                        _, p2 = kstest(th, cdf = uniform.cdf, args = (0,360)) #using degree because angle gives value in (-pi,pi] and ks test between [-arg[0], arg[1]]
+                        if p1<=pval/2 or p1>=1-pval/2 or p2<=pval:
+                            tmp = np.append(tmp,sgn)
         nogood['{}'.format(ch)] = tmp
 
     print("---Noise evaluaton completed in {:.2f} seconds.---".format(time.time()-start))
