@@ -10,10 +10,51 @@ from statsmodels.stats.diagnostic import lilliefors #lilliefors is a K-S test wi
 import numpy as np
 import pandas as pd
 
+def autocorr(x):
+    '''
+    Calculate autocorrelation of array. Not sure if it works the same with complex data.
+
+    Parameters
+    ----------
+    x : 1D array
+        Data.
+
+    Returns
+    -------
+    acov : 1D array
+        Autocovariance of data.
+    acor : 1D array
+        Autocorrelation of data (above but normalized for acov[0]).
+
+    '''
+    n = len(x)
+    m = np.mean(x)
+    acov = np.correlate(x-m,x-m, 'full')/n
+    acov = acov[len(acov)//2:]
+    acor = acov/acov[0]
+    return acov, acor
+def turningpoints(lst):
+    '''
+    Taken from https://stackoverflow.com/questions/19936033/finding-turning-points-of-an-array-in-python
+
+    Parameters
+    ----------
+    lst : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    TYPE
+        DESCRIPTION.
+
+    '''
+    dx = np.diff(lst)
+    return np.sum(dx[1:] * dx[:-1] < 0)
+
 def Look4Gauss(D, noise_area = 100, pval=0.05):
     '''
     Look4Gauss implement some test of normality for noise in an NMR signal as mentioned in "A statistical analysis of NMR spectrometer noise"(Grage and Akke, 2003).
-
+    ATTENTION: Turning point test and autocorrelation test are fixed at 95% affidability. Most of these are reliable in asympthotic condition so a large number of samples.
     Parameters
     ----------
     D : 3Darray
@@ -34,29 +75,6 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
     if len(np.shape(D))==1:
         D = D[np.newaxis,:,np.newaxis]
     
-    def autocorr(x):
-        '''
-        Calculate autocorrelation of array. Not sure if it works the same with complex data.
-
-        Parameters
-        ----------
-        x : 1D array
-            Data.
-
-        Returns
-        -------
-        acov : 1D array
-            Autocovariance of data.
-        acor : 1D array
-            Autocorrelation of data (above but normalized for acov[0]).
-
-        '''
-        n = len(x)
-        m = np.mean(x)
-        acov = np.correlate(x-m,x-m, 'full')/n
-        acov = acov[len(acov)//2:]
-        acor = acov/acov[0]
-        return acov, acor
     
     shp = np.shape(D)
     nogood = {}
@@ -70,52 +88,63 @@ def Look4Gauss(D, noise_area = 100, pval=0.05):
             _, pi = lilliefors(inoise,dist='norm')
             if pr<=pval and pi<=pval:
                 tmp = np.append(tmp,sgn)
+                print('No Gaussianity')
             else:
-                #Check for zero mean
-                #We cannot exclude that the distributions are gaussian, let's test if they have zero mean
-                _, pr = ttest_1samp(rnoise,0)
-                _, pi = ttest_1samp(inoise,0)
-                if pr<=pval and pi<=pval:
-                    tmp = np.append(tmp,sgn)
-                else:
                     #Check for same variances between real and imaginary part
-                    _, p = bartlett(rnoise, inoise)#Bartlet test works in asymptotic condition.
-                    if p <= pval:
+                _, p = bartlett(rnoise, inoise)#Bartlet test works in asymptotic condition.
+                if p <= pval:
+                    tmp = np.append(tmp,sgn)
+                    print('Different variances between parts')
+                else:
+                    #Check for zero mean
+                    #We cannot exclude that the distributions are gaussian, let's test if they have zero mean
+                    _, pr = ttest_1samp(rnoise,0)
+                    _, pi = ttest_1samp(inoise,0)
+                    if pr<=pval and pi<=pval:
                         tmp = np.append(tmp,sgn)
+                        print('No zero mean')
                     else:
-                        #Checking for indipendence between noise's points
-                        # _,racorr = autocorr(rnoise)
-                        # _,iacorr = autocorr(inoise)
-                        # l = len(racorr)
-                        # if len(racorr[np.abs(racorr)>1.96/np.sqrt(l)])>pval*l +1  or len(iacorr[np.abs(iacorr)>1.96/np.sqrt(l)])>pval*l + 1: #plus one for excluding the autocoralation at zero (only correltion of iid from 1 to n folluwa a distribution N(0,1/n)) Brockwell-Davis pg. 222
-                        #     tmp = np.append(tmp,sgn)
-                        # else:
-                        #     '''If whe cannot exclude gaussian real and imaginary part with zero mean, 
-                        #         uncorrelation of single components and equal variances,
-                        #         then check for bivariate normal distribution fer asserting 
-                        #         indipendent gaussians distribution between real and imaginary part'''
-                        r = np.abs(noise)
-                        scale = np.sqrt(np.mean((r**2)/2))#the sigma is the MLE of rayleigh as set in https://ocw.mit.edu/ans7870/18/18.443/s15/projects/Rproject3_rmd_rayleigh_theory.html 
-                        #R=r/scale
-                        th = np.angle(noise)
-                        th = np.where(th>0,th*(360/(2*np.pi)), -th*(360/(2*np.pi))+180)
-                        # cdf1 = rayleigh(0,np.sqrt(np.mean((r**2)/2))).cdf(np.linspace(np.min(r),np.max(r),100))#the article states that it could be used for ANY mean while zero mean is checked aside
-                        # cdf2 = uniform(0,360).cdf(np.linspace(np.min(th),np.max(th),100))
-                        #ATTENTION  this should be lilliefors test (K-S with MLE) but the function "lilliefors" doesn't support reyleigh pdf
-                        #Mean was set the aritmetic mean (for CLT it should be the MLE of the gaussian centered on the real value) 
-                        D0, _ = kstest(r, cdf = rayleigh.cdf, args=(0,scale))
-                        statistics = np.array([]) 
-                        for i in range (1000):
-                            samp = rayleigh.rvs(loc=0, scale=scale, size=len(r), random_state=None)
-                            s, _ = kstest(samp, cdf = rayleigh.cdf, args=(0,scale))
-                            statistics = np.append(statistics,s)
-                        if len(statistics)!=0:
-                            p1 = len(statistics[statistics>=D0])/len(statistics)#one sided p-value, for two sided, the condition in the next "if" is imposed
-                        else:
-                            p1=0.0
-                        _, p2 = kstest(th, cdf = uniform.cdf, args = (0,360)) #using degree because angle gives value in (-pi,pi] and ks test between [-arg[0], arg[1]]
-                        if p1<=pval/2 or p1>=1-pval/2 or p2<=pval:
+                        #Checking for uncorrelation between noise's points
+                        _,racorr = autocorr(rnoise)
+                        _,iacorr = autocorr(inoise)
+                        l = len(racorr)
+                        if len(racorr[np.abs(racorr)>=1.96/np.sqrt(l)])>=0.05*l +1  or len(iacorr[np.abs(iacorr)>=1.96/np.sqrt(l)])>=0.05*l + 1: #plus one for excluding the autocoralation at zero (only correltion of iid from 1 to n folluwa a distribution N(0,1/n)) Brockwell-Davis pg. 222
                             tmp = np.append(tmp,sgn)
+                            print('Significative Autocorrelation')
+                        else:
+                            zr = (turningpoints(rnoise)-((2*l-4)/3))/(np.sqrt((16*l -29)/ 90)) #Check for indipendence between points using turning points test statistics with 95% of affidability
+                            zi = (turningpoints(inoise)-((2*l-4)/3))/(np.sqrt((16*l -29)/ 90))
+                            if np.abs(zr)>=1.96 or np.abs(zi)>=1.96:
+                                tmp = np.append(tmp,sgn)
+                                print('No i.i.d.')
+                            else:
+                                '''If whe cannot exclude gaussian real and imaginary part with zero mean, 
+                                    uncorrelation of single components and equal variances,
+                                    then check for bivariate normal distribution fer asserting 
+                                    indipendent gaussians distribution between real and imaginary part'''
+                                r = np.abs(noise)
+                                scale = np.sqrt(np.mean((r**2)/2))#the sigma is the MLE of rayleigh as set in https://ocw.mit.edu/ans7870/18/18.443/s15/projects/Rproject3_rmd_rayleigh_theory.html 
+                                #R=r/scale
+                                th = np.angle(noise)
+                                th = np.where(th>0,th*(360/(2*np.pi)), -th*(360/(2*np.pi))+180)
+                                # cdf1 = rayleigh(0,np.sqrt(np.mean((r**2)/2))).cdf(np.linspace(np.min(r),np.max(r),100))#the article states that it could be used for ANY mean while zero mean is checked aside
+                                # cdf2 = uniform(0,360).cdf(np.linspace(np.min(th),np.max(th),100))
+                                #ATTENTION  this should be lilliefors test (K-S with MLE) but the function "lilliefors" doesn't support reyleigh pdf
+                                #Mean was set the aritmetic mean (for CLT it should be the MLE of the gaussian centered on the real value) 
+                                D0, _ = kstest(r, cdf = rayleigh.cdf, args=(0,scale))
+                                statistics = np.array([]) 
+                                for i in range (1000):
+                                    samp = rayleigh.rvs(loc=0, scale=scale, size=len(r), random_state=None)
+                                    s, _ = kstest(samp, cdf = rayleigh.cdf, args=(0,scale))
+                                    statistics = np.append(statistics,s)
+                                if len(statistics)!=0:
+                                    p1 = len(statistics[statistics>=D0])/len(statistics)#one sided p-value, for two sided, the condition in the next "if" is imposed
+                                else:
+                                    p1=0.0
+                                _, p2 = kstest(th, cdf = uniform.cdf, args = (0,360)) #using degree because angle gives value in (-pi,pi] and ks test between [-arg[0], arg[1]]
+                                if p1<=pval/2 or p1>=1-pval/2 or p2<=pval:
+                                    tmp = np.append(tmp,sgn)
+                                    print('No Reyleigh module or uniform angle')
         nogood['{}'.format(ch)] = tmp
 
     print("---Noise evaluaton completed in {:.2f} seconds.---".format(time.time()-start))
