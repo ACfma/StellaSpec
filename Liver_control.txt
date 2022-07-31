@@ -1,0 +1,34 @@
+ $LCMODL
+ chcali= 'PC', 'PE', 'GPC','GPE','aATP','bATP','gATP','Pi','PtdC','UDPG','NAD+','PCr'
+ deltat= 0.0001
+ desdsh= 1
+ dkntmn= 2*99
+ filbas= '/home/andrea/Liver_sim.BASIS'
+ filraw= '/home/andrea/CH5/FID0.RAW'
+ filps= '/home/andrea/CH5/FID0.PS'
+ filcsv= '/home/andrea/CH5/FID0.csv'
+ filpri= '/home/andrea/CH5/FID0_det'
+ fwhmba= 0.049
+ hzpppm= 120.664
+ key= 210387309
+ ncalib= 12
+ nobase= T
+ nrefpk(2)= 1
+ nsimul= 0
+ nunfil= 540
+ ppmend= -20.0
+ ppmref(1,2)= 0
+ ppmshf= 0
+ ppmst= 10.0
+ rfwhm= 3
+ sddegp= 4
+ sddegz= 999
+ title= ''
+ vitro= T
+ xstep= 5
+ ppmcen= 0
+ lcsv= 11
+ lprint= 6
+ dkntmn= 2*99
+ desdsh= 0.5
+ $END

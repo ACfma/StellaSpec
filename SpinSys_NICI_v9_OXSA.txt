@@ -1,0 +1,12 @@
+{"j": [[0]],"shifts": [6.7],"name": "PC","scaleFactor": 1,"T1":2.3, "T2":0.0512}
+{"j": [[0]],"shifts": [7.30],"name": "PE","scaleFactor": 1,"T1":3.9, "T2":0.0556}
+{"j": [[0]],"shifts": [3.19],"name": "GPC","scaleFactor": 1,"T1":3.9, "T2":0.0504}
+{"j": [[0]],"shifts": [3.71],"name": "GPE","scaleFactor": 1,"T1":4.4, "T2":0.044}
+{"j": [[0,16],[0,0]],"shifts": [-7.40,1000000],"name": "aATP","scaleFactor": 1,"T1":0.46, "T2":0.0182}
+{"j": [[0,15,15],[0,0,0],[0,0,0]],"shifts": [-16.0,1000000,1000000],"name": "bATP","scaleFactor": 1,"T1":0.56, "T2":0.0182}
+{"j": [[0,15],[0,0]],"shifts": [-2.21,1000000],"name": "gATP","scaleFactor": 1,"T1":0.50, "T2":0.0182}
+{"j": [[0]],"shifts": [2.2],"name": "PtdC","scaleFactor": 1,"T1":1.05, "T2":0.0}
+{"j": [[0]],"shifts": [5.37],"name": "Pi","scaleFactor": 1,"T1":1.34, "T2":0.0464}
+{"j": [[0]],"shifts": [-8.25],"name": "NAD+","scaleFactor": 2, "T1":2, "T2":0.0}
+{"j": [[0]],"shifts": [-9.48],"name": "UDPG","scaleFactor": 1, "T1":3.3, "T2":0.0}
+{"j": [[0]],"shifts": [0.0],"name": "PCr","scaleFactor": 1,"T1":4.0, "T2":0.217}
