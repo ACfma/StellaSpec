@@ -1,0 +1,8 @@
+numpy
+scipy
+h5py
+json
+pandas
+matplotlib
+fsl_mrs
+nmrglue
